@@ -1,0 +1,6 @@
+{
+  "name": "عيد ميلاد أيويه - إهداء من فارس",
+  "description": "موقع رومانسي فاخر للاحتفال بعيد ميلاد أيويه (20 أكتوبر) من حبيبها فارس مع ذكريات وجوابات حب وموسيقى خاصة.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
