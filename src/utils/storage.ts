@@ -206,26 +206,31 @@ export async function fetchServerAppData(): Promise<ServerSyncData | null> {
     if (json.success && json.data) {
       const serverData = json.data;
       
-      // Check if client has local edits that should be pushed to server or prioritized
       const localSecret = localStorage.getItem('ayoweh_secret_letter');
       const localPublic = localStorage.getItem('ayoweh_public_letter');
       const localCake = localStorage.getItem('ayoweh_cake_data');
       const localReasons = localStorage.getItem('ayoweh_love_reasons');
 
+      if (!localSecret && serverData.secretLetter) {
+        localStorage.setItem('ayoweh_secret_letter', JSON.stringify(serverData.secretLetter));
+      }
+      if (!localPublic && serverData.publicLetter) {
+        localStorage.setItem('ayoweh_public_letter', JSON.stringify(serverData.publicLetter));
+      }
+      if (!localCake && serverData.cakeData) {
+        localStorage.setItem('ayoweh_cake_data', JSON.stringify(serverData.cakeData));
+      }
+      if (!localReasons && serverData.loveReasons) {
+        localStorage.setItem('ayoweh_love_reasons', JSON.stringify(serverData.loveReasons));
+      }
+
       if (localSecret || localPublic || localCake || localReasons) {
-        // Sync local edits up to server to ensure server matches user's local state
         syncContentToServer({
           secretLetter: localSecret ? JSON.parse(localSecret) : serverData.secretLetter,
           publicLetter: localPublic ? JSON.parse(localPublic) : serverData.publicLetter,
           cakeData: localCake ? JSON.parse(localCake) : serverData.cakeData,
           loveReasons: localReasons ? JSON.parse(localReasons) : serverData.loveReasons,
         });
-      } else {
-        // If no local storage, populate local storage from server
-        if (serverData.secretLetter) localStorage.setItem('ayoweh_secret_letter', JSON.stringify(serverData.secretLetter));
-        if (serverData.publicLetter) localStorage.setItem('ayoweh_public_letter', JSON.stringify(serverData.publicLetter));
-        if (serverData.cakeData) localStorage.setItem('ayoweh_cake_data', JSON.stringify(serverData.cakeData));
-        if (serverData.loveReasons) localStorage.setItem('ayoweh_love_reasons', JSON.stringify(serverData.loveReasons));
       }
 
       return {
@@ -433,7 +438,21 @@ export async function getAllMemories(): Promise<MemoryPhoto[]> {
     if (res.ok) {
       const json = await res.json();
       if (json.success && Array.isArray(json.data?.memories) && json.data.memories.length > 0) {
-        return json.data.memories;
+        const serverMemories: MemoryPhoto[] = json.data.memories;
+        // Cache custom server photos locally in IndexedDB
+        try {
+          const db = await openDB();
+          const tx = db.transaction(STORE_PHOTOS, 'readwrite');
+          const store = tx.objectStore(STORE_PHOTOS);
+          for (const m of serverMemories) {
+            if (m.isCustom) {
+              store.put(m);
+            }
+          }
+        } catch {
+          // ignore cache error
+        }
+        return serverMemories;
       }
     }
   } catch (err) {
