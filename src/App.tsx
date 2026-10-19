@@ -8,6 +8,7 @@ import { LoveReasonsSection } from './components/LoveReasonsSection';
 import { MemoriesGallery } from './components/MemoriesGallery';
 import { SpecialLoveLetterSection } from './components/SpecialLoveLetterSection';
 import { AudioUploaderModal } from './components/AudioUploaderModal';
+import { BirthdayCakeSection } from './components/BirthdayCakeSection';
 import { AdminBar } from './components/AdminBar';
 import { AdminEditModal } from './components/AdminEditModal';
 import {
@@ -51,7 +52,7 @@ export default function App() {
   const [isSecretEnvelopeOpen, setIsSecretEnvelopeOpen] = useState<boolean>(false);
   const [isMusicModalOpen, setIsMusicModalOpen] = useState<boolean>(false);
   const [isAdminEditModalOpen, setIsAdminEditModalOpen] = useState<boolean>(false);
-  const [adminEditInitialTab, setAdminEditInitialTab] = useState<'secret' | 'public' | 'dates'>('secret');
+  const [adminEditInitialTab, setAdminEditInitialTab] = useState<'secret' | 'public' | 'dates' | 'cake'>('secret');
 
   // Audio playback state
   const [isPlayingMusic, setIsPlayingMusic] = useState<boolean>(false);
@@ -216,7 +217,17 @@ export default function App() {
           onMemoriesUpdated={loadMemories}
         />
 
-        {/* 3. Reasons Why I Love You */}
+        {/* 3. Birthday Cake Section */}
+        <BirthdayCakeSection
+          cakeData={cakeData}
+          isAdmin={isEffectiveAdmin}
+          onEditRequest={() => {
+            setAdminEditInitialTab('cake');
+            setIsAdminEditModalOpen(true);
+          }}
+        />
+
+        {/* 4. Reasons Why I Love You */}
         <LoveReasonsSection
           reasons={loveReasons}
           isAdmin={isEffectiveAdmin}
@@ -289,8 +300,10 @@ export default function App() {
           onClose={() => setIsAdminEditModalOpen(false)}
           secretLetter={secretLetter}
           publicLetter={publicLetter}
+          cakeData={cakeData}
           onSaveSecretLetter={(updated) => setSecretLetter(updated)}
           onSavePublicLetter={(updated) => setPublicLetter(updated)}
+          onSaveCakeData={(updated) => setCakeData(updated)}
           initialTab={adminEditInitialTab}
         />
       )}

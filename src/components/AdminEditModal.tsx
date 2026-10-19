@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { X, Save, Mail, FileText, Calendar, CheckCircle2 } from 'lucide-react';
-import { SecretLetter, PublicLetter } from '../types';
-import { saveSecretLetter, savePublicLetter } from '../utils/storage';
+import { X, Save, Mail, FileText, Calendar, CheckCircle2, Sparkles } from 'lucide-react';
+import { SecretLetter, PublicLetter, BirthdayCakeData } from '../types';
+import { saveSecretLetter, savePublicLetter, saveCakeData } from '../utils/storage';
 import { audioEngine } from '../utils/audioEngine';
 
 interface AdminEditModalProps {
@@ -9,9 +9,11 @@ interface AdminEditModalProps {
   onClose: () => void;
   secretLetter: SecretLetter;
   publicLetter: PublicLetter;
+  cakeData: BirthdayCakeData;
   onSaveSecretLetter: (updated: SecretLetter) => void;
   onSavePublicLetter: (updated: PublicLetter) => void;
-  initialTab?: 'secret' | 'public' | 'dates';
+  onSaveCakeData: (updated: BirthdayCakeData) => void;
+  initialTab?: 'secret' | 'public' | 'dates' | 'cake';
 }
 
 export const AdminEditModal: React.FC<AdminEditModalProps> = ({
@@ -19,11 +21,13 @@ export const AdminEditModal: React.FC<AdminEditModalProps> = ({
   onClose,
   secretLetter,
   publicLetter,
+  cakeData,
   onSaveSecretLetter,
   onSavePublicLetter,
+  onSaveCakeData,
   initialTab = 'secret'
 }) => {
-  const [activeTab, setActiveTab] = useState<'secret' | 'public' | 'dates'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'secret' | 'public' | 'dates' | 'cake'>(initialTab);
   const [successNotice, setSuccessNotice] = useState('');
 
   // Secret letter local edit state
@@ -43,6 +47,15 @@ export const AdminEditModal: React.FC<AdminEditModalProps> = ({
   const [pubSignature, setPubSignature] = useState(publicLetter.signature);
   const [meetingDate, setMeetingDate] = useState(publicLetter.meetingDate || '2026-07-21');
   const [birthdayDate, setBirthdayDate] = useState(publicLetter.birthdayDate || '2007-10-20');
+
+  // Cake data local edit state
+  const [cakeTitle, setCakeTitle] = useState(cakeData.sectionTitle);
+  const [cakeSubtitle, setCakeSubtitle] = useState(cakeData.sectionSubtitle);
+  const [tier1, setTier1] = useState(cakeData.tier1Text);
+  const [tier2, setTier2] = useState(cakeData.tier2Text);
+  const [tier3, setTier3] = useState(cakeData.tier3Text);
+  const [wishText, setWishText] = useState(cakeData.wishText);
+  const [wishSender, setWishSender] = useState(cakeData.wishSender);
 
   if (!isOpen) return null;
 
@@ -89,6 +102,25 @@ export const AdminEditModal: React.FC<AdminEditModalProps> = ({
     onSavePublicLetter(updated);
     audioEngine.playCelebrationChime();
     setSuccessNotice('تم حفظ جواب ست البنات بنجاح! 👑');
+    setTimeout(() => setSuccessNotice(''), 3000);
+  };
+
+  const handleSaveCake = (e: React.FormEvent) => {
+    e.preventDefault();
+    const updated: BirthdayCakeData = {
+      sectionTitle: cakeTitle,
+      sectionSubtitle: cakeSubtitle,
+      tier1Text: tier1,
+      tier2Text: tier2,
+      tier3Text: tier3,
+      wishText,
+      wishSender
+    };
+
+    saveCakeData(updated);
+    onSaveCakeData(updated);
+    audioEngine.playCelebrationChime();
+    setSuccessNotice('تم حفظ بيانات التورتة بنجاح! 🎂');
     setTimeout(() => setSuccessNotice(''), 3000);
   };
 
@@ -157,6 +189,18 @@ export const AdminEditModal: React.FC<AdminEditModalProps> = ({
           >
             <Calendar className="w-4 h-4" />
             <span>تواريخ الحب والعداد ⏳</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('cake')}
+            className={`pb-3 px-3 text-xs sm:text-sm font-bold flex items-center gap-2 transition cursor-pointer border-b-2 whitespace-nowrap ${
+              activeTab === 'cake'
+                ? 'border-rose-500 text-rose-300'
+                : 'border-transparent text-rose-300/50 hover:text-rose-200'
+            }`}
+          >
+            <Sparkles className="w-4 h-4" />
+            <span>تعديل التورتة 🎂</span>
           </button>
         </div>
 
@@ -389,6 +433,47 @@ export const AdminEditModal: React.FC<AdminEditModalProps> = ({
             >
               <Save className="w-4 h-4" />
               <span>تحديث التواريخ وحفظ</span>
+            </button>
+          </form>
+        )}
+        {/* TAB: CAKE */}
+        {activeTab === 'cake' && (
+          <form onSubmit={handleSaveCake} className="space-y-4 overflow-y-auto pr-1">
+            <div className="grid grid-cols-1 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-rose-300 mb-1">عنوان القسم:</label>
+                <input type="text" value={cakeTitle} onChange={(e) => setCakeTitle(e.target.value)} className="w-full px-3 py-2 rounded-xl bg-rose-950/40 border border-rose-500/30 text-white text-sm" required />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-rose-300 mb-1">العنوان الفرعي:</label>
+                <input type="text" value={cakeSubtitle} onChange={(e) => setCakeSubtitle(e.target.value)} className="w-full px-3 py-2 rounded-xl bg-rose-950/40 border border-rose-500/30 text-white text-sm" required />
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="block text-xs font-semibold text-rose-300 mb-1">نص الطبقة 1:</label>
+                  <input type="text" value={tier1} onChange={(e) => setTier1(e.target.value)} className="w-full px-3 py-2 rounded-xl bg-rose-950/40 border border-rose-500/30 text-white text-sm" required />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-rose-300 mb-1">نص الطبقة 2:</label>
+                  <input type="text" value={tier2} onChange={(e) => setTier2(e.target.value)} className="w-full px-3 py-2 rounded-xl bg-rose-950/40 border border-rose-500/30 text-white text-sm" required />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-rose-300 mb-1">نص الطبقة 3:</label>
+                  <input type="text" value={tier3} onChange={(e) => setTier3(e.target.value)} className="w-full px-3 py-2 rounded-xl bg-rose-950/40 border border-rose-500/30 text-white text-sm" required />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-rose-300 mb-1">نص الأمنية:</label>
+                <textarea value={wishText} onChange={(e) => setWishText(e.target.value)} rows={3} className="w-full px-3 py-2 rounded-xl bg-rose-950/40 border border-rose-500/30 text-white text-sm" required />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-rose-300 mb-1">الراسل:</label>
+                <input type="text" value={wishSender} onChange={(e) => setWishSender(e.target.value)} className="w-full px-3 py-2 rounded-xl bg-rose-950/40 border border-rose-500/30 text-white text-sm" required />
+              </div>
+            </div>
+            <button type="submit" className="w-full py-3 rounded-2xl bg-gradient-to-r from-rose-600 to-pink-600 text-white font-bold flex items-center justify-center gap-2 cursor-pointer shadow-lg">
+              <Save className="w-4 h-4" />
+              <span>حفظ بيانات التورتة</span>
             </button>
           </form>
         )}
