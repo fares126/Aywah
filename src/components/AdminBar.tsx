@@ -1,5 +1,6 @@
-import React from 'react';
-import { Eye, Edit3, Music, LogOut, ShieldCheck, Sparkles } from 'lucide-react';
+import React, { useRef } from 'react';
+import { Eye, Edit3, Music, LogOut, ShieldCheck, Sparkles, Download, Upload } from 'lucide-react';
+import { exportAppDataJson, importAppDataJson } from '../utils/storage';
 
 interface AdminBarProps {
   isPreviewMode: boolean;
@@ -16,8 +17,46 @@ export const AdminBar: React.FC<AdminBarProps> = ({
   onOpenMusicModal,
   onLogout
 }) => {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleExport = async () => {
+    try {
+      const jsonStr = await exportAppDataJson();
+      const blob = new Blob([jsonStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `ayoweh_birthday_backup_${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Export failed:', err);
+    }
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const content = event.target?.result as string;
+      if (content) {
+        const success = await importAppDataJson(content);
+        if (success) {
+          alert('تم استعادة النسخة الاحتياطية بنجاح! سيتم إعادة تحميل الصفحة 💖');
+          window.location.reload();
+        } else {
+          alert('فشل في قراءة ملف النسخة الاحتياطية.');
+        }
+      }
+    };
+    reader.readAsText(file);
+  };
+
   return (
-    <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 w-[94%] max-w-2xl">
+    <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 w-[94%] max-w-3xl">
       <div className="p-3 sm:p-4 rounded-3xl glass-panel-glow border-2 border-amber-500/40 shadow-[0_10px_40px_rgba(0,0,0,0.8)] flex flex-wrap items-center justify-between gap-3 bg-[#13071c]/90">
         
         {/* Admin Badge */}
@@ -50,7 +89,7 @@ export const AdminBar: React.FC<AdminBarProps> = ({
             title="معاينة الموقع بدون أزرار التعديل كما تراه أيويه"
           >
             <Eye className="w-4 h-4" />
-            <span>{isPreviewMode ? 'إنهاء المعاينة' : '👁️ معاينة كـ أيويه'}</span>
+            <span>{isPreviewMode ? 'إنهاء المعاينة' : '👁️ معاينة'}</span>
           </button>
 
           {/* Edit Letters */}
@@ -59,7 +98,7 @@ export const AdminBar: React.FC<AdminBarProps> = ({
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-rose-600/30 hover:bg-rose-600/50 text-rose-100 border border-rose-500/40 transition cursor-pointer"
           >
             <Edit3 className="w-4 h-4" />
-            <span className="hidden xs:inline">تعديل الجوابات</span>
+            <span className="hidden xs:inline">تعديل</span>
           </button>
 
           {/* Music Upload */}
@@ -69,8 +108,35 @@ export const AdminBar: React.FC<AdminBarProps> = ({
             title="إدارة أغنية الإهداء"
           >
             <Music className="w-4 h-4" />
-            <span className="hidden sm:inline">أغنية الإهداء</span>
+            <span className="hidden sm:inline">الأغنية</span>
           </button>
+
+          {/* Export Backup */}
+          <button
+            onClick={handleExport}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-amber-600/30 hover:bg-amber-600/50 text-amber-100 border border-amber-500/40 transition cursor-pointer"
+            title="تحميل نسخة احتياطية من الصور والتعديلات (للنقل بين الروابط)"
+          >
+            <Download className="w-4 h-4" />
+            <span className="hidden md:inline">تصدير نسخة</span>
+          </button>
+
+          {/* Import Backup */}
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-100 border border-emerald-500/40 transition cursor-pointer"
+            title="استعادة نسخة احتياطية (لنقل البيانات لرابط آخر)"
+          >
+            <Upload className="w-4 h-4" />
+            <span className="hidden md:inline">استعادة</span>
+          </button>
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileChange}
+            accept=".json"
+            className="hidden"
+          />
 
           {/* Logout */}
           <button

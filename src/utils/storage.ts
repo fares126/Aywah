@@ -591,3 +591,53 @@ export function setStoredUserRole(role: 'viewer' | 'admin' | null, name: string)
     // ignore
   }
 }
+
+// ----------------- Export / Import Backup Helpers -----------------
+
+export async function exportAppDataJson(): Promise<string> {
+  try {
+    const res = await fetch('/api/data', { cache: 'no-store' });
+    if (res.ok) {
+      const json = await res.json();
+      return JSON.stringify(json.data, null, 2);
+    }
+  } catch {
+    // fallback to local storage
+  }
+  const fallbackData = {
+    secretLetter: getSavedSecretLetter(),
+    publicLetter: getSavedPublicLetter(),
+    cakeData: getSavedCakeData(),
+    loveReasons: getSavedLoveReasons(),
+    memories: await getAllMemories()
+  };
+  return JSON.stringify(fallbackData, null, 2);
+}
+
+export async function importAppDataJson(jsonString: string): Promise<boolean> {
+  try {
+    const data = JSON.parse(jsonString);
+    if (data.secretLetter) saveSecretLetter(data.secretLetter);
+    if (data.publicLetter) savePublicLetter(data.publicLetter);
+    if (data.cakeData) saveCakeData(data.cakeData);
+    if (data.loveReasons) saveLoveReasons(data.loveReasons);
+    if (Array.isArray(data.memories)) {
+      for (const m of data.memories) {
+        if (m.isCustom) {
+          await saveCustomPhoto(m);
+        }
+      }
+    }
+    // Also push content to server
+    await syncContentToServer({
+      secretLetter: data.secretLetter,
+      publicLetter: data.publicLetter,
+      cakeData: data.cakeData,
+      loveReasons: data.loveReasons
+    });
+    return true;
+  } catch (err) {
+    console.error('Import backup error:', err);
+    return false;
+  }
+}
