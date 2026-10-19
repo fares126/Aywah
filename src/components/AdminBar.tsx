@@ -71,7 +71,7 @@ export const AdminBar: React.FC<AdminBarProps> = ({
             </div>
             <p className="text-[10px] text-emerald-300/90 flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-              <span>{isPreviewMode ? 'وضع المعاينة كـ أيويه مفعل' : 'الصور والتعديلات تُحفظ تلقائياً على السيرفر'}</span>
+              <span>{isPreviewMode ? 'وضع المعاينة كـ أيويه مفعل' : 'مزامنة سحابية تلقائية: أي صورة أو تعديل يظهر فوراً لأي شخص من أي تلفون 🌍'}</span>
             </p>
           </div>
         </div>
