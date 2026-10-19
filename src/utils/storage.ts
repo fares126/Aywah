@@ -206,40 +206,21 @@ export async function fetchServerAppData(): Promise<ServerSyncData | null> {
     if (json.success && json.data) {
       const serverData = json.data;
       
-      const localSecret = localStorage.getItem('ayoweh_secret_letter');
-      const localPublic = localStorage.getItem('ayoweh_public_letter');
-      const localCake = localStorage.getItem('ayoweh_cake_data');
-      const localReasons = localStorage.getItem('ayoweh_love_reasons');
-
-      if (!localSecret && serverData.secretLetter) {
+      // Always update localStorage with authoritative server data so all devices/phones stay in sync
+      if (serverData.secretLetter) {
         localStorage.setItem('ayoweh_secret_letter', JSON.stringify(serverData.secretLetter));
       }
-      if (!localPublic && serverData.publicLetter) {
+      if (serverData.publicLetter) {
         localStorage.setItem('ayoweh_public_letter', JSON.stringify(serverData.publicLetter));
       }
-      if (!localCake && serverData.cakeData) {
+      if (serverData.cakeData) {
         localStorage.setItem('ayoweh_cake_data', JSON.stringify(serverData.cakeData));
       }
-      if (!localReasons && serverData.loveReasons) {
+      if (serverData.loveReasons) {
         localStorage.setItem('ayoweh_love_reasons', JSON.stringify(serverData.loveReasons));
       }
 
-      if (localSecret || localPublic || localCake || localReasons) {
-        syncContentToServer({
-          secretLetter: localSecret ? JSON.parse(localSecret) : serverData.secretLetter,
-          publicLetter: localPublic ? JSON.parse(localPublic) : serverData.publicLetter,
-          cakeData: localCake ? JSON.parse(localCake) : serverData.cakeData,
-          loveReasons: localReasons ? JSON.parse(localReasons) : serverData.loveReasons,
-        });
-      }
-
-      return {
-        ...serverData,
-        secretLetter: localSecret ? JSON.parse(localSecret) : serverData.secretLetter,
-        publicLetter: localPublic ? JSON.parse(localPublic) : serverData.publicLetter,
-        cakeData: localCake ? JSON.parse(localCake) : serverData.cakeData,
-        loveReasons: localReasons ? JSON.parse(localReasons) : serverData.loveReasons,
-      };
+      return serverData;
     }
   } catch (err) {
     console.warn('Could not fetch server data, fallback to local:', err);
