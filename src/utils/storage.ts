@@ -196,7 +196,7 @@ export interface ServerSyncData {
 }
 
 /**
- * Fetch all persistent data from the backend server
+ * Fetch all persistent data from the backend server, respecting local storage edits
  */
 export async function fetchServerAppData(): Promise<ServerSyncData | null> {
   try {
@@ -204,12 +204,37 @@ export async function fetchServerAppData(): Promise<ServerSyncData | null> {
     if (!res.ok) return null;
     const json = await res.json();
     if (json.success && json.data) {
-      const { secretLetter, publicLetter, cakeData, loveReasons, memories } = json.data;
-      if (secretLetter) localStorage.setItem('ayoweh_secret_letter', JSON.stringify(secretLetter));
-      if (publicLetter) localStorage.setItem('ayoweh_public_letter', JSON.stringify(publicLetter));
-      if (cakeData) localStorage.setItem('ayoweh_cake_data', JSON.stringify(cakeData));
-      if (loveReasons) localStorage.setItem('ayoweh_love_reasons', JSON.stringify(loveReasons));
-      return json.data;
+      const serverData = json.data;
+      
+      // Check if client has local edits that should be pushed to server or prioritized
+      const localSecret = localStorage.getItem('ayoweh_secret_letter');
+      const localPublic = localStorage.getItem('ayoweh_public_letter');
+      const localCake = localStorage.getItem('ayoweh_cake_data');
+      const localReasons = localStorage.getItem('ayoweh_love_reasons');
+
+      if (localSecret || localPublic || localCake || localReasons) {
+        // Sync local edits up to server to ensure server matches user's local state
+        syncContentToServer({
+          secretLetter: localSecret ? JSON.parse(localSecret) : serverData.secretLetter,
+          publicLetter: localPublic ? JSON.parse(localPublic) : serverData.publicLetter,
+          cakeData: localCake ? JSON.parse(localCake) : serverData.cakeData,
+          loveReasons: localReasons ? JSON.parse(localReasons) : serverData.loveReasons,
+        });
+      } else {
+        // If no local storage, populate local storage from server
+        if (serverData.secretLetter) localStorage.setItem('ayoweh_secret_letter', JSON.stringify(serverData.secretLetter));
+        if (serverData.publicLetter) localStorage.setItem('ayoweh_public_letter', JSON.stringify(serverData.publicLetter));
+        if (serverData.cakeData) localStorage.setItem('ayoweh_cake_data', JSON.stringify(serverData.cakeData));
+        if (serverData.loveReasons) localStorage.setItem('ayoweh_love_reasons', JSON.stringify(serverData.loveReasons));
+      }
+
+      return {
+        ...serverData,
+        secretLetter: localSecret ? JSON.parse(localSecret) : serverData.secretLetter,
+        publicLetter: localPublic ? JSON.parse(localPublic) : serverData.publicLetter,
+        cakeData: localCake ? JSON.parse(localCake) : serverData.cakeData,
+        loveReasons: localReasons ? JSON.parse(localReasons) : serverData.loveReasons,
+      };
     }
   } catch (err) {
     console.warn('Could not fetch server data, fallback to local:', err);
