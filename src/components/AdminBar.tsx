@@ -30,8 +30,9 @@ export const AdminBar: React.FC<AdminBarProps> = ({
               <Sparkles className="w-3.5 h-3.5 text-amber-400" />
               <span>لوحة تحكم فارس 👑</span>
             </div>
-            <p className="text-[10px] text-rose-300/70">
-              {isPreviewMode ? 'وضع المعاينة كـ أيويه مفعل' : 'صلاحيات الأدمن كاملة'}
+            <p className="text-[10px] text-emerald-300/90 flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span>{isPreviewMode ? 'وضع المعاينة كـ أيويه مفعل' : 'الصور والتعديلات تُحفظ تلقائياً على السيرفر'}</span>
             </p>
           </div>
         </div>

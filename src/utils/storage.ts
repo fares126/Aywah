@@ -116,6 +116,16 @@ export const DEFAULT_LOVE_REASONS: LoveReason[] = [
   }
 ];
 
+export const DEFAULT_CAKE_DATA: BirthdayCakeData = {
+  sectionTitle: 'انفخي في الشموع واتمني أمنية يا روحي 🎂✨',
+  sectionSubtitle: '19 شمعة بتنور حياتنا.. كل شمعة فيها دعوة من قلبي ليكي بالسعادة والفرح وراحة البال.',
+  tier1Text: '19 سنة قمر 🌸',
+  tier2Text: 'أيويه & فارس',
+  tier3Text: '20 أكتوبر 2007 • كل ثانية بحبك أكتر ♾️',
+  wishText: 'يا رب كل سنة وانتي في حضني ومعايا، وأشوف الضحكة اللي بتنور دنيتي دايمًا على وشك.. يا رب يحققلك كل اللي بتتمنيه، ونفضل سند لبعض لحد آخر العمر.. بحبك يا أيويه يا ست البنات ❤️',
+  wishSender: 'فارس'
+};
+
 export const DEFAULT_SAMPLE_MEMORIES: MemoryPhoto[] = [
   {
     id: 'mem-1',
@@ -151,150 +161,86 @@ export const DEFAULT_SAMPLE_MEMORIES: MemoryPhoto[] = [
   }
 ];
 
-// Open IndexedDB
+// Open IndexedDB safely
 function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
-
-    request.onupgradeneeded = (event) => {
-      const db = (event.target as IDBOpenDBRequest).result;
-      if (!db.objectStoreNames.contains(STORE_SONG)) {
-        db.createObjectStore(STORE_SONG, { keyPath: 'id' });
-      }
-      if (!db.objectStoreNames.contains(STORE_PHOTOS)) {
-        db.createObjectStore(STORE_PHOTOS, { keyPath: 'id' });
-      }
-    };
-
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
+    try {
+      const request = indexedDB.open(DB_NAME, DB_VERSION);
+      request.onupgradeneeded = (event) => {
+        const db = (event.target as IDBOpenDBRequest).result;
+        if (!db.objectStoreNames.contains(STORE_SONG)) {
+          db.createObjectStore(STORE_SONG, { keyPath: 'id' });
+        }
+        if (!db.objectStoreNames.contains(STORE_PHOTOS)) {
+          db.createObjectStore(STORE_PHOTOS, { keyPath: 'id' });
+        }
+      };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    } catch (e) {
+      reject(e);
+    }
   });
 }
 
-// Custom Song in IndexedDB
-export async function saveCustomSong(file: File): Promise<{ name: string; size: number }> {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction(STORE_SONG, 'readwrite');
-    const store = transaction.objectStore(STORE_SONG);
-    const data = {
-      id: 'active_song',
-      name: file.name,
-      blob: file,
-      size: file.size,
-      type: file.type,
-      uploadedAt: new Date().toISOString()
-    };
-    const req = store.put(data);
-    req.onsuccess = () => resolve({ name: file.name, size: file.size });
-    req.onerror = () => reject(req.error);
-  });
+// ----------------- Server Sync API Helpers -----------------
+
+export interface ServerSyncData {
+  secretLetter?: SecretLetter;
+  publicLetter?: PublicLetter;
+  cakeData?: BirthdayCakeData;
+  loveReasons?: LoveReason[];
+  memories?: MemoryPhoto[];
+  hasCustomAudio?: boolean;
+  audioName?: string;
 }
 
-export async function getCustomSong(): Promise<{ name: string; blob: Blob; type: string } | null> {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction(STORE_SONG, 'readonly');
-    const store = transaction.objectStore(STORE_SONG);
-    const req = store.get('active_song');
-    req.onsuccess = () => {
-      if (req.result) {
-        resolve({
-          name: req.result.name,
-          blob: req.result.blob,
-          type: req.result.type || 'audio/mp3'
-        });
-      } else {
-        resolve(null);
-      }
-    };
-    req.onerror = () => reject(req.error);
-  });
-}
-
-export async function deleteCustomSong(): Promise<void> {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction(STORE_SONG, 'readwrite');
-    const store = transaction.objectStore(STORE_SONG);
-    const req = store.delete('active_song');
-    req.onsuccess = () => resolve();
-    req.onerror = () => reject(req.error);
-  });
-}
-
-// Custom Photos in IndexedDB
-export async function saveCustomPhoto(photo: MemoryPhoto): Promise<void> {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction(STORE_PHOTOS, 'readwrite');
-    const store = transaction.objectStore(STORE_PHOTOS);
-    const req = store.put(photo);
-    req.onsuccess = () => resolve();
-    req.onerror = () => {
-      console.error('IndexedDB save error:', req.error);
-      reject(req.error);
-    };
-  });
-}
-
-export async function getCustomPhotos(): Promise<MemoryPhoto[]> {
+/**
+ * Fetch all persistent data from the backend server
+ */
+export async function fetchServerAppData(): Promise<ServerSyncData | null> {
   try {
-    const db = await openDB();
-    return new Promise((resolve, reject) => {
-      const transaction = db.transaction(STORE_PHOTOS, 'readonly');
-      const store = transaction.objectStore(STORE_PHOTOS);
-      const req = store.getAll();
-      req.onsuccess = () => resolve(req.result || []);
-      req.onerror = () => reject(req.error);
+    const res = await fetch('/api/data', { cache: 'no-store' });
+    if (!res.ok) return null;
+    const json = await res.json();
+    if (json.success && json.data) {
+      const { secretLetter, publicLetter, cakeData, loveReasons, memories } = json.data;
+      if (secretLetter) localStorage.setItem('ayoweh_secret_letter', JSON.stringify(secretLetter));
+      if (publicLetter) localStorage.setItem('ayoweh_public_letter', JSON.stringify(publicLetter));
+      if (cakeData) localStorage.setItem('ayoweh_cake_data', JSON.stringify(cakeData));
+      if (loveReasons) localStorage.setItem('ayoweh_love_reasons', JSON.stringify(loveReasons));
+      return json.data;
+    }
+  } catch (err) {
+    console.warn('Could not fetch server data, fallback to local:', err);
+  }
+  return null;
+}
+
+/**
+ * Persist content modifications to the backend server
+ */
+export async function syncContentToServer(payload: {
+  secretLetter?: SecretLetter;
+  publicLetter?: PublicLetter;
+  cakeData?: BirthdayCakeData;
+  loveReasons?: LoveReason[];
+}): Promise<boolean> {
+  try {
+    const res = await fetch('/api/save-content', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
     });
-  } catch {
-    return [];
+    return res.ok;
+  } catch (err) {
+    console.warn('Server sync error:', err);
+    return false;
   }
 }
 
-export function getDeletedPhotoIds(): string[] {
-  try {
-    const saved = localStorage.getItem('ayoweh_deleted_memory_ids');
-    if (saved) return JSON.parse(saved);
-  } catch {
-    // fallback
-  }
-  return [];
-}
+// ----------------- Letters & Content Helpers -----------------
 
-export async function deleteMemoryPhoto(id: string): Promise<void> {
-  const deleted = getDeletedPhotoIds();
-  if (!deleted.includes(id)) {
-    deleted.push(id);
-    localStorage.setItem('ayoweh_deleted_memory_ids', JSON.stringify(deleted));
-  }
-  try {
-    const db = await openDB();
-    const transaction = db.transaction(STORE_PHOTOS, 'readwrite');
-    const store = transaction.objectStore(STORE_PHOTOS);
-    await new Promise<void>((resolve) => {
-      const req = store.delete(id);
-      req.onsuccess = () => resolve();
-      req.onerror = () => resolve();
-    });
-  } catch {
-    // ignore
-  }
-}
-
-export async function getAllMemories(): Promise<MemoryPhoto[]> {
-  const deletedIds = getDeletedPhotoIds();
-  const custom = await getCustomPhotos();
-  const all = [...custom, ...DEFAULT_SAMPLE_MEMORIES];
-  return all.filter((photo) => !deletedIds.includes(photo.id));
-}
-
-export async function deleteCustomPhoto(id: string): Promise<void> {
-  return deleteMemoryPhoto(id);
-}
-
-// LocalStorage helpers for letters, reasons, auth
 export function getSavedSecretLetter(): SecretLetter {
   try {
     const saved = localStorage.getItem('ayoweh_secret_letter');
@@ -306,7 +252,13 @@ export function getSavedSecretLetter(): SecretLetter {
 }
 
 export function saveSecretLetter(letter: SecretLetter): void {
-  localStorage.setItem('ayoweh_secret_letter', JSON.stringify(letter));
+  try {
+    localStorage.setItem('ayoweh_secret_letter', JSON.stringify(letter));
+  } catch {
+    // ignore
+  }
+  // Persist to server
+  syncContentToServer({ secretLetter: letter });
 }
 
 export function getSavedPublicLetter(): PublicLetter {
@@ -320,7 +272,13 @@ export function getSavedPublicLetter(): PublicLetter {
 }
 
 export function savePublicLetter(letter: PublicLetter): void {
-  localStorage.setItem('ayoweh_public_letter', JSON.stringify(letter));
+  try {
+    localStorage.setItem('ayoweh_public_letter', JSON.stringify(letter));
+  } catch {
+    // ignore
+  }
+  // Persist to server
+  syncContentToServer({ publicLetter: letter });
 }
 
 export function getSavedLoveReasons(): LoveReason[] {
@@ -334,18 +292,14 @@ export function getSavedLoveReasons(): LoveReason[] {
 }
 
 export function saveLoveReasons(reasons: LoveReason[]): void {
-  localStorage.setItem('ayoweh_love_reasons', JSON.stringify(reasons));
+  try {
+    localStorage.setItem('ayoweh_love_reasons', JSON.stringify(reasons));
+  } catch {
+    // ignore
+  }
+  // Persist to server
+  syncContentToServer({ loveReasons: reasons });
 }
-
-export const DEFAULT_CAKE_DATA: BirthdayCakeData = {
-  sectionTitle: 'انفخي في الشموع واتمني أمنية يا روحي 🎂✨',
-  sectionSubtitle: '19 شمعة بتنور حياتنا.. كل شمعة فيها دعوة من قلبي ليكي بالسعادة والفرح وراحة البال.',
-  tier1Text: '19 سنة قمر 🌸',
-  tier2Text: 'أيويه & فارس',
-  tier3Text: '20 أكتوبر 2007 • كل ثانية بحبك أكتر ♾️',
-  wishText: 'يا رب كل سنة وانتي في حضني ومعايا، وأشوف الضحكة اللي بتنور دنيتي دايمًا على وشك.. يا رب يحققلك كل اللي بتتمنيه، ونفضل سند لبعض لحد آخر العمر.. بحبك يا أيويه يا ست البنات ❤️',
-  wishSender: 'فارس'
-};
 
 export function getSavedCakeData(): BirthdayCakeData {
   try {
@@ -358,8 +312,236 @@ export function getSavedCakeData(): BirthdayCakeData {
 }
 
 export function saveCakeData(data: BirthdayCakeData): void {
-  localStorage.setItem('ayoweh_cake_data', JSON.stringify(data));
+  try {
+    localStorage.setItem('ayoweh_cake_data', JSON.stringify(data));
+  } catch {
+    // ignore
+  }
+  // Persist to server
+  syncContentToServer({ cakeData: data });
 }
+
+// ----------------- Memory Photos (Server + Local Fallback) -----------------
+
+export async function saveCustomPhoto(photo: MemoryPhoto): Promise<void> {
+  // 1. Try to save to Server Disk
+  try {
+    const res = await fetch('/api/photos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(photo)
+    });
+    if (res.ok) {
+      console.log('✅ Photo saved permanently to server disk!');
+    }
+  } catch (err) {
+    console.warn('Could not save photo to server API:', err);
+  }
+
+  // 2. Also save to IndexedDB as local cache
+  try {
+    const db = await openDB();
+    await new Promise<void>((resolve, reject) => {
+      const transaction = db.transaction(STORE_PHOTOS, 'readwrite');
+      const store = transaction.objectStore(STORE_PHOTOS);
+      const req = store.put(photo);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+  } catch (err) {
+    console.warn('IndexedDB cache save skipped/failed:', err);
+  }
+}
+
+export async function getCustomPhotos(): Promise<MemoryPhoto[]> {
+  try {
+    const db = await openDB();
+    return new Promise((resolve) => {
+      const transaction = db.transaction(STORE_PHOTOS, 'readonly');
+      const store = transaction.objectStore(STORE_PHOTOS);
+      const req = store.getAll();
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = () => resolve([]);
+    });
+  } catch {
+    return [];
+  }
+}
+
+export async function deleteMemoryPhoto(id: string): Promise<void> {
+  // 1. Send DELETE to server
+  try {
+    await fetch(`/api/photos/${encodeURIComponent(id)}`, {
+      method: 'DELETE'
+    });
+  } catch (err) {
+    console.warn('Server photo delete error:', err);
+  }
+
+  // 2. Delete from local IndexedDB
+  try {
+    const db = await openDB();
+    const transaction = db.transaction(STORE_PHOTOS, 'readwrite');
+    const store = transaction.objectStore(STORE_PHOTOS);
+    store.delete(id);
+  } catch {
+    // ignore
+  }
+
+  // 3. Mark in local deleted list
+  try {
+    const saved = localStorage.getItem('ayoweh_deleted_memory_ids');
+    const deleted: string[] = saved ? JSON.parse(saved) : [];
+    if (!deleted.includes(id)) {
+      deleted.push(id);
+      localStorage.setItem('ayoweh_deleted_memory_ids', JSON.stringify(deleted));
+    }
+  } catch {
+    // ignore
+  }
+}
+
+export async function getAllMemories(): Promise<MemoryPhoto[]> {
+  // 1. First attempt to get authoritative memories from the server
+  try {
+    const res = await fetch('/api/data', { cache: 'no-store' });
+    if (res.ok) {
+      const json = await res.json();
+      if (json.success && Array.isArray(json.data?.memories) && json.data.memories.length > 0) {
+        return json.data.memories;
+      }
+    }
+  } catch (err) {
+    console.warn('Failed to load server memories, using local fallback:', err);
+  }
+
+  // 2. Local Fallback
+  try {
+    const deletedSaved = localStorage.getItem('ayoweh_deleted_memory_ids');
+    const deletedIds: string[] = deletedSaved ? JSON.parse(deletedSaved) : [];
+    const custom = await getCustomPhotos();
+    const all = [...custom, ...DEFAULT_SAMPLE_MEMORIES];
+    return all.filter((photo) => !deletedIds.includes(photo.id));
+  } catch {
+    return DEFAULT_SAMPLE_MEMORIES;
+  }
+}
+
+// ----------------- Song Audio (Server + IndexedDB) -----------------
+
+export async function saveCustomSong(file: File): Promise<{ name: string; size: number }> {
+  // Read as base64 to send to server
+  try {
+    const reader = new FileReader();
+    const base64Promise = new Promise<string>((resolve, reject) => {
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+    const base64Audio = await base64Promise;
+
+    await fetch('/api/upload-audio', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: file.name,
+        type: file.type || 'audio/mp3',
+        base64Audio
+      })
+    });
+  } catch (err) {
+    console.warn('Could not upload audio to server:', err);
+  }
+
+  // Also save to IndexedDB
+  try {
+    const db = await openDB();
+    await new Promise<void>((resolve, reject) => {
+      const transaction = db.transaction(STORE_SONG, 'readwrite');
+      const store = transaction.objectStore(STORE_SONG);
+      const data = {
+        id: 'active_song',
+        name: file.name,
+        blob: file,
+        size: file.size,
+        type: file.type,
+        uploadedAt: new Date().toISOString()
+      };
+      const req = store.put(data);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+  } catch {
+    // ignore
+  }
+
+  return { name: file.name, size: file.size };
+}
+
+export async function getCustomSong(): Promise<{ name: string; blob: Blob; type: string } | null> {
+  // First check if server has uploaded song
+  try {
+    const dataRes = await fetch('/api/data');
+    if (dataRes.ok) {
+      const json = await dataRes.json();
+      if (json.success && json.data?.hasCustomAudio) {
+        const audioRes = await fetch('/api/audio');
+        if (audioRes.ok) {
+          const blob = await audioRes.blob();
+          return {
+            name: json.data.audioName || 'custom_song.mp3',
+            blob,
+            type: 'audio/mpeg'
+          };
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Server audio fetch failed:', err);
+  }
+
+  // Fallback to IndexedDB
+  try {
+    const db = await openDB();
+    return new Promise((resolve) => {
+      const transaction = db.transaction(STORE_SONG, 'readonly');
+      const store = transaction.objectStore(STORE_SONG);
+      const req = store.get('active_song');
+      req.onsuccess = () => {
+        if (req.result) {
+          resolve({
+            name: req.result.name,
+            blob: req.result.blob,
+            type: req.result.type || 'audio/mp3'
+          });
+        } else {
+          resolve(null);
+        }
+      };
+      req.onerror = () => resolve(null);
+    });
+  } catch {
+    return null;
+  }
+}
+
+export async function deleteCustomSong(): Promise<void> {
+  try {
+    await fetch('/api/audio', { method: 'DELETE' });
+  } catch {
+    // ignore
+  }
+  try {
+    const db = await openDB();
+    const transaction = db.transaction(STORE_SONG, 'readwrite');
+    const store = transaction.objectStore(STORE_SONG);
+    store.delete('active_song');
+  } catch {
+    // ignore
+  }
+}
+
+// ----------------- User Auth Role Helpers -----------------
 
 export function getStoredUserRole(): { role: 'viewer' | 'admin' | null; name: string } {
   try {
@@ -372,13 +554,15 @@ export function getStoredUserRole(): { role: 'viewer' | 'admin' | null; name: st
 }
 
 export function setStoredUserRole(role: 'viewer' | 'admin' | null, name: string): void {
-  if (role) {
-    localStorage.setItem('ayoweh_user_role', role);
-    localStorage.setItem('ayoweh_user_name', name);
-  } else {
-    localStorage.removeItem('ayoweh_user_role');
-    localStorage.removeItem('ayoweh_user_name');
+  try {
+    if (role) {
+      localStorage.setItem('ayoweh_user_role', role);
+      localStorage.setItem('ayoweh_user_name', name);
+    } else {
+      localStorage.removeItem('ayoweh_user_role');
+      localStorage.removeItem('ayoweh_user_name');
+    }
+  } catch {
+    // ignore
   }
 }
-
-

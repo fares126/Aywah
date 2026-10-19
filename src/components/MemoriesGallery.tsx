@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Camera, Plus, Trash2, Calendar, Heart, ChevronLeft, ChevronRight, X, Sparkles, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Camera, Plus, Trash2, Calendar, Heart, ChevronLeft, ChevronRight, X, Sparkles, AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react';
 import { MemoryPhoto } from '../types';
 import { saveCustomPhoto, deleteMemoryPhoto } from '../utils/storage';
 import { audioEngine } from '../utils/audioEngine';
+import { compressImage } from '../utils/imageCompressor';
 
 interface MemoriesGalleryProps {
   memories: MemoryPhoto[];
@@ -25,34 +26,40 @@ export const MemoriesGallery: React.FC<MemoriesGalleryProps> = ({
   const [newDate, setNewDate] = useState('');
   const [newCaption, setNewCaption] = useState('');
   const [newImagePreview, setNewImagePreview] = useState<string | null>(null);
+  const [isCompressing, setIsCompressing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [formError, setFormError] = useState('');
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
-    setTimeout(() => setToastMessage(''), 3000);
+    setTimeout(() => setToastMessage(''), 3500);
   };
 
-  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
-      setFormError('من فضلك اختر ملف صورة صحيح');
+      setFormError('من فضلك اختر ملف صورة صالح (JPEG, PNG, WEBP)');
       return;
     }
 
-    if (file.size > 1.5 * 1024 * 1024) {
-      setFormError('حجم الصورة كبير جداً (أقصى حجم 1.5 ميجابايت)');
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      setNewImagePreview(reader.result as string);
+    try {
+      setIsCompressing(true);
       setFormError('');
-    };
-    reader.readAsDataURL(file);
+      // Compress any phone image (even 10MB+) to high-def crisp lightweight WebP/JPEG
+      const optimizedDataUrl = await compressImage(file, {
+        maxWidth: 1400,
+        maxHeight: 1400,
+        quality: 0.85
+      });
+      setNewImagePreview(optimizedDataUrl);
+    } catch (err: any) {
+      console.error('Image compression error:', err);
+      setFormError('حدث خطأ أثناء معالجة الصورة، يرجى اختيار صورة أخرى');
+    } finally {
+      setIsCompressing(false);
+    }
   };
 
   const handleAddMemory = async (e: React.FormEvent) => {
@@ -75,8 +82,8 @@ export const MemoriesGallery: React.FC<MemoriesGalleryProps> = ({
 
       await saveCustomPhoto(newMemory);
       audioEngine.playCelebrationChime();
-      onMemoriesUpdated();
-      showToast('تمت إضافة الصورة بنجاح إلى ألبوم الذكريات! 📸✨');
+      await onMemoriesUpdated();
+      showToast('تم حفظ الصورة بنجاح وبشكل دائم في الألبوم! 📸✨');
 
       // Reset
       setNewTitle('');
@@ -85,8 +92,9 @@ export const MemoriesGallery: React.FC<MemoriesGalleryProps> = ({
       setNewImagePreview(null);
       setFormError('');
       setIsAddModalOpen(false);
-    } catch {
-      setFormError('فشل حفظ الصورة، يرجى المحاولة بصورة أصغر حجماً');
+    } catch (err) {
+      console.error('Failed to save memory:', err);
+      setFormError('فشل حفظ الصورة، يرجى المحاولة مرة أخرى');
     } finally {
       setIsSaving(false);
     }
@@ -410,14 +418,25 @@ export const MemoriesGallery: React.FC<MemoriesGalleryProps> = ({
                   type="file"
                   accept="image/*"
                   onChange={handleImageSelect}
-                  required
+                  disabled={isCompressing || isSaving}
+                  required={!newImagePreview}
                   className="w-full text-xs text-rose-200 file:py-2 file:px-4 file:rounded-xl file:border-0 file:bg-rose-600 file:text-white file:font-semibold hover:file:bg-rose-500 cursor-pointer"
                 />
+                {isCompressing && (
+                  <p className="mt-2 text-xs text-amber-300 flex items-center gap-1.5 animate-pulse">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>جاري معالجة وضغط جودة الصورة لتكون فائقة الوضوح...</span>
+                  </p>
+                )}
               </div>
 
               {newImagePreview && (
-                <div className="relative w-full h-36 rounded-xl overflow-hidden border border-rose-500/30">
+                <div className="relative w-full h-40 rounded-xl overflow-hidden border border-rose-500/30 group">
                   <img src={newImagePreview} alt="Preview" className="w-full h-full object-cover" />
+                  <div className="absolute top-2 right-2 px-2 py-0.5 rounded-md bg-emerald-950/80 border border-emerald-500/50 text-[10px] text-emerald-300 font-bold flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3" />
+                    <span>الصورة جاهزة للحفظ الدائم</span>
+                  </div>
                 </div>
               )}
 
@@ -463,10 +482,20 @@ export const MemoriesGallery: React.FC<MemoriesGalleryProps> = ({
 
               <button
                 type="submit"
-                disabled={isSaving || !newImagePreview}
-                className="w-full py-3 rounded-xl bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-500 hover:to-pink-500 text-white font-bold text-sm shadow-lg shadow-rose-600/30 transition cursor-pointer disabled:opacity-50"
+                disabled={isSaving || isCompressing || !newImagePreview}
+                className="w-full py-3 rounded-xl bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-500 hover:to-pink-500 text-white font-bold text-sm shadow-lg shadow-rose-600/30 transition cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
               >
-                {isSaving ? 'جاري الحفظ...' : 'حفظ الذكرى في الألبوم 💖'}
+                {isSaving ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>جاري الحفظ الدائم على السيرفر...</span>
+                  </>
+                ) : (
+                  <>
+                    <Heart className="w-4 h-4 fill-white text-white" />
+                    <span>حفظ الذكرى بشكل دائم في الألبوم 💖</span>
+                  </>
+                )}
               </button>
             </form>
           </div>

@@ -29,7 +29,8 @@ import {
   getAllMemories,
   getCustomSong,
   getStoredUserRole,
-  setStoredUserRole
+  setStoredUserRole,
+  fetchServerAppData
 } from './utils/storage';
 import { audioEngine, DEFAULT_OFFICIAL_SONG_NAME } from './utils/audioEngine';
 import { Heart, Sparkles, Volume2 } from 'lucide-react';
@@ -71,10 +72,19 @@ export default function App() {
       setIsLoginPortalOpen(true);
     }
 
-    // Load custom memories from IndexedDB
-    loadMemories();
+    // Fetch authoritative data from the backend server
+    fetchServerAppData().then((serverData) => {
+      if (serverData) {
+        if (serverData.secretLetter) setSecretLetter(serverData.secretLetter);
+        if (serverData.publicLetter) setPublicLetter(serverData.publicLetter);
+        if (serverData.cakeData) setCakeData(serverData.cakeData);
+        if (serverData.loveReasons) setLoveReasons(serverData.loveReasons);
+        if (serverData.memories && serverData.memories.length > 0) setMemories(serverData.memories);
+      }
+    });
 
-    // Check custom song in IndexedDB
+    // Load memories and song
+    loadMemories();
     loadSong();
 
     // 1. Attempt to play Amer Muneeb's song immediately when site opens
