@@ -42,6 +42,11 @@ export const MemoriesGallery: React.FC<MemoriesGalleryProps> = ({
       return;
     }
 
+    if (file.size > 1.5 * 1024 * 1024) {
+      setFormError('حجم الصورة كبير جداً (أقصى حجم 1.5 ميجابايت)');
+      return;
+    }
+
     const reader = new FileReader();
     reader.onload = () => {
       setNewImagePreview(reader.result as string);

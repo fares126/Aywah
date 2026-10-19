@@ -231,7 +231,10 @@ export async function saveCustomPhoto(photo: MemoryPhoto): Promise<void> {
     const store = transaction.objectStore(STORE_PHOTOS);
     const req = store.put(photo);
     req.onsuccess = () => resolve();
-    req.onerror = () => reject(req.error);
+    req.onerror = () => {
+      console.error('IndexedDB save error:', req.error);
+      reject(req.error);
+    };
   });
 }
 
